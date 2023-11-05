@@ -3,4 +3,6 @@ service_account.json
 **/__pycache__
 **/.DS_Store
 .env
-
+.notes
+data
+venv
