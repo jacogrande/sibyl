@@ -5,6 +5,14 @@ import os
 
 load_dotenv()
 
+"""
+COLLECTIONS:
+songs   -   used for initial tests with CLIP embeddings
+songs2  -   used for tests with PCA embeddings  
+"""
+COLLECTION_NAME="songs2"
+COLLECTION_DIMENSIONS=2000
+
 client = Client({
   'nodes': [{
         'host': os.environ.get("TYPESENSE_NODE"),
@@ -16,34 +24,35 @@ client = Client({
 })
 
 collection_schema = {
-  "name": "songs",
+  "name": "songs2",
   "fields": [
     {"name": "song_id", "type": "string"}, # Firestore doc id
-    {"name": "embedding", "type": "float[]", "num_dim": 512} 
+    {"name": "file_path", "type": "string"},
+    {"name": "embedding", "type": "float[]", "num_dim": COLLECTION_DIMENSIONS} 
   ],
 }
 
 # Check if the collection already exists
 try:
     # This will throw an ObjectNotFound exception if the collection does not exist
-    existing_collection = client.collections['songs'].retrieve()
-    print("Collection 'songs' already exists.")
+    existing_collection = client.collections[COLLECTION_NAME].retrieve()
+    print(f"Collection {COLLECTION_NAME} already exists.")
 except ObjectNotFound:
     # If the collection does not exist, create it
     client.collections.create(collection_schema)
-    print("Created new collection 'songs'.")
+    print(f"Created new collection {COLLECTION_NAME}.")
 
 def fetch_embeddings(song_id):
     try:
         print(f"Fetching embeddings for song with id: {song_id}")
         search_parameters = {
-            'collection': 'songs',
+            'collection': COLLECTION_NAME,
             'query_by': 'song_id',
             'q': song_id,
             'per_page':1,
             'page':1,
         }
-        search_results = client.collections['songs'].documents.search(search_parameters)
+        search_results = client.collections[COLLECTION_NAME].documents.search(search_parameters)
 
         # Verify that the song was found
         if search_results['found'] == 0 or len(search_results['hits']) == 0:
@@ -67,13 +76,13 @@ def search_song_by_embedding(embeddings):
             'searches':[{
                 'q':'*',  
                 'vector_query': vector_query,
-                'per_page':5,
+                'per_page':10,
                 'page':1,
                 'exclude_fields': 'embedding'
             }]
         }
         search_results = client.multi_search.perform(search_parameters, {
-            'collection': 'songs'
+            'collection': COLLECTION_NAME
         })
 
         # Verify that the song was found
@@ -87,3 +96,12 @@ def search_song_by_embedding(embeddings):
         print(f"Error: {e}")
         return None
 
+
+def save_embeddings_to_typesense(song_id, embeddings, file_path):
+    print("Saving embeddings to Typesense")
+    document = {
+        'song_id': song_id,
+        'embedding': embeddings,
+        'file_path': file_path
+    }
+    client.collections[COLLECTION_NAME].documents.create(document)
